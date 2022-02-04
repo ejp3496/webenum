@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 import re
 from sys import stdout
 import datetime
+import colorama
 
 BANNER = "\n" \
         "|‾|" + " " * 5 + "/‾/ " + "_" * 4 + "/ __ )___  ____  __  " + "_" * 6 + " ___\n" \
@@ -97,7 +98,7 @@ def print_update(update):
     update = str(datetime.datetime.now().strftime('%H:%M:%S')) + ': ' + update
     if len(update) > 100:
         update = update[0:97:]+'...'
-    stdout.write('\r'+update)
+    stdout.write(''+update)
     stdout.flush()
 
 #
@@ -108,7 +109,7 @@ def print_new_url(url):
     if url.status is not None:
         print("\033[F\r%-150s \t (status:%3s)" % (str(url), url.status))
     else:
-        print("\033[F\r%-150s \t" % (str(url)))
+        print("\033[1;3H%-150s \t" % (str(url)))
 
 #
 # @desc Overwrites final update and print various statistics
@@ -235,9 +236,7 @@ def find_links(page, path):
 # @param depth - integer for maximum recursive depth
 #
 def spider(url, depth):
-    print_update('Depth: ' + str(depth) + ' Guessing: ' + str(url))
     found_urls = brute_force(url, depth)
-    print_update('Depth: ' + str(depth) + ' Requesting: ' + str(url))
     r = requests.get(str(url)) # , allow_redirects=False)
     paths = find_links(r.text, url)
     paths = paths + found_urls
@@ -292,8 +291,7 @@ def brute_force(url, depth):
             if test_url not in URLS:
                 if check_url(test_url) != 404:
                     new_url = Url(test_url)
-                    #print(new_url,test_url,check_url(test_url))
-                    #print_update('Depth: ' + str(depth) + ' Guessing: ' + str(index) + '/' + str(len(WORDLIST)) + '  ' + str(url))
+                    print_update('Depth: %2i %5i/%5i' % (depth, index, len(WORDLIST)))
                     URLS.append(new_url)
                     found_urls.append(new_url)
                     print_new_url(new_url)

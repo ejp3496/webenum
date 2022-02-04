@@ -275,8 +275,9 @@ def parse_wordlist():
 #
 def brute_force(url, depth):
     if '.' not in url.path:
+        index = 0
         for word in WORDLIST:
-
+            index += 1
             # figure out if a / needs to be added or taken away
             if len(url.path) != 0 and len(word) != 0:
                 if url.path[-1] == '/' and word[0] == '/':
@@ -291,8 +292,9 @@ def brute_force(url, depth):
                 if check_url(test_url) != 404:
                     new_url = Url(test_url)
                     #print(new_url,test_url,check_url(test_url))
+                    #print_update('Depth: ' + str(depth) + ' Guessing: ' + str(index) + '/' + str(len(WORDLIST)) + '  ' + str(url))
                     URLS.append(new_url)
-                    #print_new_url(new_url)
+                    print_new_url(new_url)
 
 #
 # @main

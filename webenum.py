@@ -212,18 +212,14 @@ def find_links(page, path, depth):
         if ARGS.check_all_urls:
             new_url.status = check_url(new_url)
 
-        if ORIGINAL_DOMAIN == new_url.domain:
-            if new_url not in URLS:
-                paths.append(new_url)
-                URLS.append(new_url)
-                print_update('Depth: %2i' % depth, new_url)
-        elif ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
-            if new_url not in URLS:
-                paths.append(new_url)
-                URLS.append(new_url)
-                print_update('Depth: %2i' % depth, new_url)
+        if ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
             if new_url.domain not in DOMAINS:
                 DOMAINS.append(new_url.domain)
+            if new_url not in URLS:
+                paths.append(new_url)
+                URLS.append(new_url)
+                print_update('Depth: %2i spidering...' % depth, new_url)
+
     return paths
 
 

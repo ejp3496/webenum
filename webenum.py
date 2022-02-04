@@ -99,14 +99,19 @@ def print_update(update, url):
     update = str(datetime.datetime.now().strftime('%H:%M:%S')) + ': ' + update
     if len(update) > 100:
         update = update[0:97:]+'...'
-    stdout.write(''+update)
+    if len(update) < 100:
+        padding = 100 - len(update)
+        update = update+' '*padding
+    stdout.write('\033[1B\r'+update)
     stdout.flush()
 
     if url is not None:
         if url.status is not None:
-            print("\033[1A\r%-100s  (status:%3s)\033[1B\r" % (str(url), url.status))
+            print("\033[1A\r%-100s (status:%3s)" % (str(url), url.status),flush=True)
+            #print("\033[1A\r%-100s  (status:%3s)\033[1B\r" % (str(url), url.status),flush=True)
         else:
-            print("\033[1A\r%-150s \033[1B\r" % (str(url)))
+            print("\033[1A\r%-100s" % (str(url)),flush=True)
+            #print("\033[1A\r%-150s \033[1B\r" % (str(url)),flush=True)
 
 #
 # @desc Overwrites final update and print various statistics
@@ -230,7 +235,7 @@ def find_links(page, path, depth):
 #
 def spider(url, depth):
     found_urls = brute_force(url, depth)
-    print_update('Depth: %2i' % depth, None)
+    print_update('Depth: %2i spidering...' % depth, None)
     r = requests.get(str(url)) # , allow_redirects=False)
     paths = find_links(r.text, url, depth)
     paths = paths + found_urls
@@ -289,7 +294,7 @@ def brute_force(url, depth):
                     new_url.status = status
                     URLS.append(new_url)
                     found_urls.append(new_url)
-                    print_update('Depth: %2i %5i/%5i' % (depth, index, len(WORDLIST)), new_url)
+                    print_update('Depth: %2i %i/%i' % (depth, index, len(WORDLIST)), new_url)
     return found_urls
 
 #

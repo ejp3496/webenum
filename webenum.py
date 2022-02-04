@@ -97,12 +97,13 @@ def print_banner():
 #
 def print_update(update, url):
     update = str(datetime.datetime.now().strftime('%H:%M:%S')) + ': ' + update
-    if len(update) > 100:
-        update = update[0:97:]+'...'
-    if len(update) < 100:
-        padding = 100 - len(update)
+    if len(update) > 150:
+        update = update[0:147:]+'...'
+    if len(update) < 150:
+        padding = 150 - len(update)
         update = update+' '*padding
-    stdout.write('\033[1B\r'+update)
+    #stdout.write('\033[1B\r'+update)
+    stdout.write('\r'+update)
     stdout.flush()
 
     if url is not None:
@@ -117,7 +118,7 @@ def print_update(update, url):
 # @desc Overwrites final update and print various statistics
 #
 def print_final_stats():
-    print('\r'+' '*100)
+    print('\033[1A\r'+' '*100)
     print('='*75+'\n')
     print('STATISTICS:')
     print('\tURLS:', len(URLS))

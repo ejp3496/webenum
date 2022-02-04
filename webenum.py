@@ -236,7 +236,7 @@ def find_links(page, path):
 #
 def spider(url, depth):
     print_update('Depth: ' + str(depth) + ' Guessing: ' + str(url))
-    brute_force(url, depth)
+    found_urls = brute_force(url, depth)
     print_update('Depth: ' + str(depth) + ' Requesting: ' + str(url))
     r = requests.get(str(url)) # , allow_redirects=False)
     paths = find_links(r.text, url)
@@ -245,6 +245,7 @@ def spider(url, depth):
     if depth >= DEPTH or len(paths) == 0:
         return
 
+    paths = paths + found_urls
     for path in paths:
         spider(path, depth+1)
 
@@ -274,6 +275,7 @@ def parse_wordlist():
 # @param depth - current depth in the spidering process
 #
 def brute_force(url, depth):
+    found_urls = []
     if '.' not in url.path:
         index = 0
         for word in WORDLIST:
@@ -292,9 +294,11 @@ def brute_force(url, depth):
                 if check_url(test_url) != 404:
                     new_url = Url(test_url)
                     #print(new_url,test_url,check_url(test_url))
-                    print_update('Depth: ' + str(depth) + ' Guessing: ' + str(index) + '/' + str(len(WORDLIST)) + '  ' + str(url))
+                    #print_update('Depth: ' + str(depth) + ' Guessing: ' + str(index) + '/' + str(len(WORDLIST)) + '  ' + str(url))
                     URLS.append(new_url)
+                    found_urls.append(new_url)
                     print_new_url(new_url)
+    return found_urls
 
 #
 # @main

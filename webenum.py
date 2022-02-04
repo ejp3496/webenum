@@ -246,6 +246,7 @@ def spider(url, depth):
         return
 
     paths = paths + found_urls
+    print(paths)
     for path in paths:
         spider(path, depth+1)
 

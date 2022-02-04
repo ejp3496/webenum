@@ -241,7 +241,6 @@ def spider(url, depth):
     r = requests.get(str(url)) # , allow_redirects=False)
     paths = find_links(r.text, url)
     paths = paths + found_urls
-    print(paths)
     # exit conditions for recursion
     if depth >= DEPTH or len(paths) == 0:
         return

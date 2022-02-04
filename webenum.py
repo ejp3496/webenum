@@ -107,10 +107,10 @@ def print_update(update, url):
 
     if url is not None:
         if url.status is not None:
-            print("\033[1A\r%-100s (status:%3s)" % (str(url), url.status),flush=True)
+            print("\033[1A\r%-100s (status:%3s)\n" % (str(url), url.status), flush=True)
             #print("\033[1A\r%-100s  (status:%3s)\033[1B\r" % (str(url), url.status),flush=True)
         else:
-            print("\033[1A\r%-100s" % (str(url)),flush=True)
+            print("\033[1A\r%-100s\n" % (str(url)), flush=True)
             #print("\033[1A\r%-150s \033[1B\r" % (str(url)),flush=True)
 
 #

@@ -17,11 +17,12 @@ import datetime
 import colorama
 
 BANNER = "\n" \
-        "|‾|" + " " * 5 + "/‾/ " + "_" * 4 + "/ __ )___  ____  __  " + "_" * 6 + " ___\n" \
-        "| | /| / / __/ / __  / _ \\/ __ \\/ / / / __ `__ \\\n" \
-        "| |/ |/ / /___/ /_/ /  __/ / / / /_" + "/ " * 7 + "\n|__/|__/"+"_" * 5 + "/"+"_" * 5 + "" \
-        "/\\___/_/ /_/\\__,_/_/ /_/ /_/\n" \
-        "" + "=" * 50 + "\n" + " " * 25 + "=" * 25 + "\n" + " " * 38 + "=" * 12  # Ascii art banner
+        "\033[34m|‾|" + " " * 5 + "/‾/ \033[31m" + "_" * 4 + "/\033[33m __ )\033[34m___  \033[32m____  \033[34m__  __\033[31m____ ___\n" \
+        "\033[34m| | /| / /\033[31m __/\033[33m / __  /\033[34m _ \\\033[32m/ __ \\\033[34m/ / / / \033[31m__ `__ \\\n" \
+        "\033[34m| |/ |/ / \033[31m/___/\033[33m /_/ /\033[34m  __/\033[32m / / /\033[34m /_/ / \033[31m/"+" /" * 4 + "\n" \
+        "\033[34m|__/|__/\033[31m"+"_" * 5 + "/\033[33m"+"_" * 5 + "" \
+        "/\033[34m\\___/\033[32m_/ /_/\033[34m\\__,_/\033[31m_/ /_/ /_/\n" \
+        "" + "=" * 50 + "\n" + " " * 25 + "\033[33m=" * 25 + "\n" + " " * 38 + "\033[32m=" * 12  # Ascii art banner
 
 URLS = []                # found urls (updated by script)
 DOMAINS = []             # found domains (updated by script)
@@ -94,22 +95,18 @@ def print_banner():
 # @desc Prints update to bottom of the screen while running
 # @param update - string to print
 #
-def print_update(update):
+def print_update(update, url):
     update = str(datetime.datetime.now().strftime('%H:%M:%S')) + ': ' + update
     if len(update) > 100:
         update = update[0:97:]+'...'
     stdout.write(''+update)
     stdout.flush()
 
-#
-# @desc Prints url to the screen without interfering with the update text
-# @param url - url to print
-#
-def print_new_url(url):
-    if url.status is not None:
-        print("\033[F\r%-150s \t (status:%3s)" % (str(url), url.status))
-    else:
-        print("\033[1;3H%-150s \t" % (str(url)))
+    if url is not None:
+        if url.status is not None:
+            print("\033[1A\r%-100s  (status:%3s)\033[1B\r" % (str(url), url.status))
+        else:
+            print("\033[1A\r%-150s \033[1B\r" % (str(url)))
 
 #
 # @desc Overwrites final update and print various statistics
@@ -190,7 +187,7 @@ def build_url_string(str_url, original_url):
 # @param path - the request url that produced the html page
 # @return paths - list of Url objects to visit next
 #
-def find_links(page, path):
+def find_links(page, path, depth):
     soup = BeautifulSoup(page, 'html.parser')
     links = soup.findAll('a')
     paths = []
@@ -219,12 +216,12 @@ def find_links(page, path):
             if new_url not in URLS:
                 paths.append(new_url)
                 URLS.append(new_url)
-                print_new_url(new_url)
+                print_update('Depth: %2i' % depth, new_url)
         elif ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
             if new_url not in URLS:
                 paths.append(new_url)
                 URLS.append(new_url)
-                print_new_url(new_url)
+                print_update('Depth: %2i' % depth, new_url)
             if new_url.domain not in DOMAINS:
                 DOMAINS.append(new_url.domain)
     return paths
@@ -237,8 +234,9 @@ def find_links(page, path):
 #
 def spider(url, depth):
     found_urls = brute_force(url, depth)
+    print_update('Depth: %2i' % depth, None)
     r = requests.get(str(url)) # , allow_redirects=False)
-    paths = find_links(r.text, url)
+    paths = find_links(r.text, url, depth)
     paths = paths + found_urls
     # exit conditions for recursion
     if depth >= DEPTH or len(paths) == 0:
@@ -254,7 +252,7 @@ def spider(url, depth):
 # @return True - if url does not produce 404
 #
 def check_url(test_url):
-    r = requests.get(test_url.strip('\n')) # ,allow_redirects=False)
+    r = requests.get(str(test_url).strip('\n')) # ,allow_redirects=False)
     return r.status_code
 
 #
@@ -289,12 +287,13 @@ def brute_force(url, depth):
 
             test_url = url.service + url.domain + url.port + url.path + word
             if test_url not in URLS:
-                if check_url(test_url) != 404:
+                status = check_url(test_url)
+                if status != 404:
                     new_url = Url(test_url)
-                    print_update('Depth: %2i %5i/%5i' % (depth, index, len(WORDLIST)))
+                    new_url.status = status
                     URLS.append(new_url)
                     found_urls.append(new_url)
-                    print_new_url(new_url)
+                    print_update('Depth: %2i %5i/%5i' % (depth, index, len(WORDLIST)), new_url)
     return found_urls
 
 #
@@ -303,6 +302,7 @@ def brute_force(url, depth):
 #
 def main():
     global ARGS, ORIGINAL_DOMAIN, DEPTH
+    colorama.init(autoreset=True)
     ARGS = parseargs()
     if ARGS.depth:
         DEPTH = ARGS.depth

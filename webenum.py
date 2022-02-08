@@ -11,6 +11,7 @@
 #       graceful shutdown after ctrlc
 #       make -b arg contingent on -w
 #       file output for domains
+#       add file size in list
 ########################################################################################################
 import os
 import requests
@@ -18,7 +19,6 @@ import argparse
 from bs4 import BeautifulSoup
 import re
 from sys import stdout
-import datetime
 from time import time
 import colorama
 import threading

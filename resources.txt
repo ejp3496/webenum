@@ -1,0 +1,9 @@
+os
+requests
+argparse
+bs4
+re
+sys
+time
+colorama
+threading

@@ -118,9 +118,10 @@ def brute_force_thread(depth, url, word, found_urls):
             new_url = Url(test_url)
             new_url.status = status
             THREAD_LOCK.acquire()
-            URLS.append(new_url)
-            found_urls.append(new_url)
-            print_update(depth, url, new_url, 0)
+            if new_url not in URLS:
+                URLS.append(new_url)
+                found_urls.append(new_url)
+                print_update(depth, url, new_url, 0)
             THREAD_LOCK.release()
 
 #

@@ -7,8 +7,6 @@
 # @author Evan Palmiotti
 # @required requests, argparse, bs4, re, sys
 # @todo:
-#       graceful shutdown after ctrlc
-#       make -b arg contingent on -w
 #       file output for domains
 #       add file size in list
 ########################################################################################################
@@ -59,6 +57,7 @@ class Url:
         self.port = reg_match.group('port') or ''
         self.params = reg_match.group('params') or ''
         self.status = None
+        self.size = None
 
     def set_status(self, status):
         self.status = status
@@ -111,12 +110,13 @@ def brute_force_thread(depth, url, word, found_urls):
     print_update(depth, url, None, 0)
     test_url = url.service + url.domain + url.port + url.path + word
     if test_url not in URLS:
-        THREAD_LOCK.acquire()
-        THREAD_LOCK.release()
-        status = check_url(test_url)
+        result = request(test_url)
+        status = result.status_code
+        size = len(result.text)
         if status and status != 404:
             new_url = Url(test_url)
             new_url.status = status
+            new_url.size = size
             THREAD_LOCK.acquire()
             if new_url not in URLS:
                 URLS.append(new_url)
@@ -161,15 +161,13 @@ def print_banner():
             print('%-20s %s' % (arg_name+':', arg_value))
     print('='*75+'\n\n')
 
-def pad_or_trim(string):
+def pad(string):
     max_width = os.get_terminal_size().columns
     length = len(string)
     if length != max_width:
         if length < max_width:
             padding = max_width - length
             string = string + ' '*padding
-        else:
-            string = string[0:max_width-length-3:] + '...'
     return string
 
 #
@@ -178,23 +176,23 @@ def pad_or_trim(string):
 #
 def print_update(depth, url, new_url, mode):
     if mode == 1:
-        update = '\r%.2f | Depth: %2i | Spidering %-20s' % (time()-START, depth, url)
+        update = '\r%.2f | Depth: %2i | Spidering %-15s' % (time()-START, depth, url)
     else:
-        update = '\r%.2f | Depth: %2i | Brute Forcing %-20s' % (time()-START, depth, url)
+        update = '\r%.2f | Depth: %2i | Brute Forcing %-15s' % (time()-START, depth, url)
 
     if new_url is not None:
         if new_url.status is not None:
-            url_string = "\r%-100s (status:%3s)" % (str(new_url), new_url.status)
-            stdout.write(pad_or_trim(url_string)+'\n')
+            url_string = "\r%-100s (status:%s) [size:%s]" % (str(new_url), new_url.status, new_url.size)
+            stdout.write(pad(url_string)+'\n')
             stdout.flush()
         else:
             url_string = "\r%-100s" % (str(new_url))
-            stdout.write(pad_or_trim(url_string)+'\n')
+            stdout.write(pad(url_string)+'\n')
             stdout.flush()
-        stdout.write(pad_or_trim(update))
+        stdout.write(pad(update))
         stdout.flush()
     else:
-        stdout.write(pad_or_trim(update))
+        stdout.write(pad(update))
         stdout.flush()
 
 #
@@ -302,10 +300,13 @@ def find_links(page, path, depth):
 
         # check if the new url is on an acceptable domain and add it to the necessary lists
         if ARGS.check_all_urls:
-            if new_url.status:
-                new_url.status = check_url(new_url)
+            result = request(new_url)
+            if result is not None:
+                new_url.status = result.status_code
+                new_url.size = len(result.text)
             else:
                 new_url.status = 'Timeout'
+
         if ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
             if new_url.domain not in DOMAINS:
                 DOMAINS.append(new_url.domain)
@@ -356,17 +357,6 @@ def spider(url, depth):
     for path in paths:
         spider(path, depth+1)
 
-#
-# @desc requests url and looks for a response other than 404
-# @param test_url - url to test
-# @return True - if url does not produce 404
-#
-def check_url(test_url):
-    r = request(test_url)
-    if r is not None:
-        return r.status_code
-    return None
-
 def exit_with_error(error):
     print('\r\033[31m '+error)
     exit(0)
@@ -411,9 +401,26 @@ def brute_force(url, depth):
                     exit_with_error('Error joining threads: '+str(e))
     return found_urls
 
-def exit_handler():
-    print('exiting')
+def exit_handler(signum, frame):
+    if ARGS.out_file:
+        print('\nWriting partial results to file...')
+        output_to_file(ARGS.out_file)
+    print('\nexiting')
+    print_final_stats()
     exit(0)
+
+def output_to_file(filename):
+    try:
+        with open(filename, 'w') as out_file:
+            index = 0
+            for url in URLS:
+                index += 1
+                if index >= len(URLS):
+                    out_file.write(str(url))
+                else:
+                    out_file.write(str(url)+'\n')
+    except Exception as e:
+        exit_with_error('Error writing to file ' + str(e))
 
 #
 # @main
@@ -429,8 +436,8 @@ def main():
     original_url = Url(ARGS.url)
 
     test_url = build_url_string('/cfe15ae6b841b3ac72777ace53f35ab4888', original_url)
-    stat = check_url(test_url)
-    if stat != 404:
+    stat = request(test_url).status_code
+    if stat is not None and stat != 404:
         exit_with_error('Could not validate 404 on bad url: '+test_url)
 
     ORIGINAL_DOMAIN = original_url.domain
@@ -439,20 +446,8 @@ def main():
     if ARGS.wordlist:
         parse_wordlist()
     spider(original_url, 0)
-    print_final_stats()
-
     if ARGS.out_file:
-        try:
-            with open(ARGS.out_file, 'w') as out_file:
-                index = 0
-                for url in URLS:
-                    index += 1
-                    if index >= len(URLS):
-                        out_file.write(str(url))
-                    else:
-                        out_file.write(str(url)+'\n')
-        except Exception as e:
-            exit_with_error('Error writing to file ' + str(e))
-
+        output_to_file(ARGS.out_file)
+    print_final_stats()
 
 main()

@@ -7,7 +7,6 @@
 # @author Evan Palmiotti
 # @required requests, argparse, bs4, re, sys
 # @todo:
-#       add connection check at the beginning to find the not found code
 #       graceful shutdown after ctrlc
 #       make -b arg contingent on -w
 #       file output for domains
@@ -22,11 +21,15 @@ from sys import stdout
 from time import time
 import colorama
 import threading
+import warnings
+import signal
 
 BANNER = "\n" \
-        "\033[34m|‾|" + " " * 5 + "/‾/ \033[31m" + "_" * 4 + "/\033[33m __ )\033[34m___  \033[32m____  \033[34m__  __\033[31m____ ___\n" \
-        "\033[34m| | /| / /\033[31m __/\033[33m / __  /\033[34m _ \\\033[32m/ __ \\\033[34m/ / / / \033[31m__ `__ \\\n" \
-        "\033[34m| |/ |/ / \033[31m/___/\033[33m /_/ /\033[34m  __/\033[32m / / /\033[34m /_/ / \033[31m/"+" /" * 4 + "\n" \
+        "\033[34m|‾|" + " " * 5 + "/‾/ \033[31m" + "_" * 4 + "/\033[33m __ )\033[34m___  \033[32m____  \033[34m__  " \
+        "__\033[31m____ ___\n" \
+        "\033[34m| | /| / /\033[31m __/\033[33m / __  /\033[34m _ \\\033[32m/ __ \\\033[34m/ / / / \033[31m__ `__ \\\n"\
+        "\033[34m| |/ |/ / \033[31m/___/\033[33m /_/ /\033[34m  __/\033[32m / / /\033[34m /_/ / \033[31m/"+" /" * 4 + \
+         "\n" \
         "\033[34m|__/|__/\033[31m"+"_" * 5 + "/\033[33m"+"_" * 5 + "" \
         "/\033[34m\\___/\033[32m_/ /_/\033[34m\\__,_/\033[31m_/ /_/ /_/\n" \
         "" + "=" * 50 + "\n" + " " * 25 + "\033[33m=" * 25 + "\n" + " " * 38 + "\033[32m=" * 12  # Ascii art banner
@@ -105,6 +108,7 @@ def brute_force_thread(depth, url, word, found_urls):
     elif len(url.path) == 0:
         word = '/' + word
 
+    print_update(depth, url, None, 0)
     test_url = url.service + url.domain + url.port + url.path + word
     if test_url not in URLS:
         THREAD_LOCK.acquire()
@@ -141,7 +145,8 @@ def parseargs():
                         action='store_true')
     parser.add_argument('--timeout', help='timeout time for requests.', default=10)
     parser.add_argument('--out-file', '-o', help='write results to specified file', default=None)
-    parser.add_argument('--threads', '-t', help='Number of threads to run', default=3)
+    parser.add_argument('--threads', '-t', help='Number of threads to run', default=10)
+    parser.add_argument('--no-verify-ssl', '-v', help="Don't verify SSL", action='store_true')
     return parser.parse_args()
 
 #
@@ -151,7 +156,8 @@ def print_banner():
     print(BANNER)
     print('\n'+'='*75)
     for arg_name, arg_value in vars(ARGS).items():
-        print('%-20s %s' % (arg_name+':', arg_value))
+        if arg_name != "quiet":
+            print('%-20s %s' % (arg_name+':', arg_value))
     print('='*75+'\n\n')
 
 def pad_or_trim(string):
@@ -240,7 +246,10 @@ def build_url_string(str_url, original_url):
         if str_url[0] == '.':
             # handle urls like ./
             if str_url[1] == '/':
-                new_url = new_url + original_path + str_url[2::]
+                if original_path[-1] == '/':
+                    new_url = new_url + original_path + str_url[2::]
+                else:
+                    new_url = new_url + original_path + str_url[1::]
                 return new_url
             # handle urls like ../
             elif str_url[1] == '.':
@@ -272,20 +281,20 @@ def build_url_string(str_url, original_url):
 def find_links(page, path, depth):
     soup = BeautifulSoup(page, 'html.parser')
     links = soup.findAll('a')
+    links += soup.findAll('link')
+    links += soup.findAll('base')
     paths = []
     for link in links:
-        # ignor <a> flags with no 'href' attribute
+        # ignore <a> flags with no 'href' attribute
         try:
             url_str = link['href']
         except KeyError:
             continue
-
         # if the href is a shortened url, build a full url
         if '://' not in url_str:
             new_url = Url(build_url_string(url_str, path))
         else:
             new_url = Url(url_str)
-
         # Need to handle empty hrefs
         if new_url is None:
             continue
@@ -296,7 +305,6 @@ def find_links(page, path, depth):
                 new_url.status = check_url(new_url)
             else:
                 new_url.status = 'Timeout'
-
         if ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
             if new_url.domain not in DOMAINS:
                 DOMAINS.append(new_url.domain)
@@ -304,13 +312,22 @@ def find_links(page, path, depth):
                 paths.append(new_url)
                 URLS.append(new_url)
                 print_update(depth, path, new_url, 1)
-
+        elif ORIGINAL_DOMAIN == new_url.domain:
+            if new_url not in URLS:
+                paths.append(new_url)
+                URLS.append(new_url)
+                print_update(depth, path, new_url, 1)
     return paths
 
 def request(url):
     r = None
     try:
-        r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout)
+        with warnings.catch_warnings() as warn:
+            warnings.simplefilter('ignore')
+            r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                             allow_redirects=False)
+            if str(url) == ARGS.url and r.status_code == 404:
+                exit_with_error('Error validating request: Received 404')
     except Exception as e:
         if str(url) == ARGS.url:
             exit_with_error('Error sending request: ' + str(e))
@@ -324,14 +341,11 @@ def request(url):
 def spider(url, depth):
     found_urls = []
     print_update(depth, url, None, 1)
-    try:
-        r = request(url)
-    except Exception as e:
-        exit_with_error("Error requesting URL: "+str(e))
+    r = request(url)
     if ARGS.brute_force_depth == 0 or depth <= ARGS.brute_force_depth:
         found_urls = brute_force(url, depth)
     paths = []
-    if r:
+    if r is not None:
         paths = find_links(r.text, url, depth)
         paths = paths + found_urls
     # exit conditions for recursion
@@ -348,7 +362,7 @@ def spider(url, depth):
 #
 def check_url(test_url):
     r = request(test_url)
-    if r:
+    if r is not None:
         return r.status_code
     return None
 
@@ -363,8 +377,7 @@ def parse_wordlist():
     global WORDLIST, ARGS
     try:
         with open(ARGS.wordlist, 'r') as word_file:
-            for word in word_file:
-                WORDLIST.append(word)
+            WORDLIST = word_file.readlines()
     except Exception as e:
         exit_with_error('Error reading wordlist file ' + str(e))
 
@@ -397,6 +410,10 @@ def brute_force(url, depth):
                     exit_with_error('Error joining threads: '+str(e))
     return found_urls
 
+def exit_handler():
+    print('exiting')
+    exit(0)
+
 #
 # @main
 # @desc processes arguments and kicks off spidering. Once done, prints final statistics.
@@ -405,15 +422,21 @@ def main():
     global ARGS, ORIGINAL_DOMAIN
     colorama.init(autoreset=True)
     ARGS = parseargs()
+    signal.signal(signal.SIGINT, exit_handler)
     if not ARGS.quiet:
         print_banner()
-
-    if ARGS.wordlist:
-        parse_wordlist()
     original_url = Url(ARGS.url)
+
+    test_url = build_url_string('/cfe15ae6b841b3ac72777ace53f35ab4888', original_url)
+    stat = check_url(test_url)
+    if stat != 404:
+        exit_with_error('Could not validate 404 on bad url: '+test_url)
+
     ORIGINAL_DOMAIN = original_url.domain
     DOMAINS.append(ORIGINAL_DOMAIN)
 
+    if ARGS.wordlist:
+        parse_wordlist()
     spider(original_url, 0)
     print_final_stats()
 

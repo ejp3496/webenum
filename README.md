@@ -4,7 +4,7 @@
 |__/|__/_____/_____/\___/_/ /_/\__,_/_/ /_/ /_/</pre>
 
 ## Description
-Web enumerator similar to dirbuster or gobuster but utilizes brute forcing AND spidering to get a more complete picture of a web surface.
+Web enumerator similar to dirbuster or gobuster but utilizes brute forcing AND spidering to get a more complete picture of a web surface. Git project includes a small word list named ```wordlist.txt```
   - No clunky GUI
   - Highly customizable
   - fast

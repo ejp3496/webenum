@@ -80,6 +80,8 @@ class Url:
 # @var word - current directory guess
 # @var found_urls - list of found urls
 # @var depth - current depth (for progress updates)
+# @var index - current index of word in wordlist (for progress reporting)
+# @var end - length of wordlist (for progress reporting)
 # @var exc - exception raised by thread (to be caught when threads are joined)
 #
 class BruteForceThread(threading.Thread):
@@ -113,6 +115,7 @@ class BruteForceThread(threading.Thread):
 # @param url - current url to be guessed
 # @param word - current guess
 # @param found_urls list of found urls (shared by threads)
+# @param bf_info - string describing brute force progress
 #
 def brute_force_thread(depth, url, word, found_urls, bf_info):
     # figure out if a / needs to be added or taken away

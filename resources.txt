@@ -7,3 +7,5 @@ sys
 time
 colorama
 threading
+warnings
+signal

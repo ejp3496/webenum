@@ -6,13 +6,11 @@
 #
 # @author Evan Palmiotti
 # @required requests, argparse, bs4, re, sys
-# @todo:
-#       file output for domains
-#       add file size in list
 ########################################################################################################
 import os
 import requests
 import argparse
+from argparse import RawTextHelpFormatter
 from bs4 import BeautifulSoup
 import re
 from sys import stdout
@@ -76,18 +74,31 @@ class Url:
 
     def __ge__(self, other): return repr(other) >= repr(self)
 
+#
+# @desc Thread used for brute forcing directories
+# @var url - url being brute forced
+# @var word - current directory guess
+# @var found_urls - list of found urls
+# @var depth - current depth (for progress updates)
+# @var exc - exception raised by thread (to be caught when threads are joined)
+#
 class BruteForceThread(threading.Thread):
-    def __init__(self, url, word, found_urls, depth):
+    def __init__(self, url, word, found_urls, depth, index, end):
         threading.Thread.__init__(self)
         self.url = url
         self.word = word
         self.found_urls = found_urls
         self.depth = depth
+        self.index = index
+        self.end = end
         self.exc = None
 
     def run(self):
         try:
-            brute_force_thread(self.depth, self.url, self.word, self.found_urls)
+            with warnings.catch_warnings() as warn:
+                warnings.simplefilter('ignore')
+                bf_info = "%i/%i" % (self.index, self.end)
+                brute_force_thread(self.depth, self.url, self.word, self.found_urls, bf_info)
         except Exception as e:
             self.exc = e
 
@@ -96,8 +107,14 @@ class BruteForceThread(threading.Thread):
         if self.exc:
             raise self.exc
 
-
-def brute_force_thread(depth, url, word, found_urls):
+#
+# @desc function used by brute force threads
+# @param depth - current depth
+# @param url - current url to be guessed
+# @param word - current guess
+# @param found_urls list of found urls (shared by threads)
+#
+def brute_force_thread(depth, url, word, found_urls, bf_info):
     # figure out if a / needs to be added or taken away
     if len(url.path) != 0 and len(word) != 0:
         if url.path[-1] == '/' and word[0] == '/':
@@ -107,21 +124,25 @@ def brute_force_thread(depth, url, word, found_urls):
     elif len(url.path) == 0:
         word = '/' + word
 
-    print_update(depth, url, None, 0)
+    print_update(depth, url, None, bf_info)
     test_url = url.service + url.domain + url.port + url.path + word
     if test_url not in URLS:
-        result = request(test_url)
+        new_url = Url(test_url)
+        result = request(new_url)
+        if result is None:
+            raise ConnectionError("Lost connection to server")
         status = result.status_code
         size = len(result.text)
         if status and status != 404:
-            new_url = Url(test_url)
             new_url.status = status
             new_url.size = size
+            # synchronize threads for writing operations
             THREAD_LOCK.acquire()
             if new_url not in URLS:
                 URLS.append(new_url)
-                found_urls.append(new_url)
-                print_update(depth, url, new_url, 0)
+                print_update(depth, url, new_url, bf_info)
+                if status not in [401, 400, 403]:
+                    found_urls.append(new_url)
             THREAD_LOCK.release()
 
 #
@@ -131,23 +152,39 @@ def brute_force_thread(depth, url, word, found_urls):
 # @return parsed_args - Namespace with arguments
 #
 def parseargs():
-    parser = argparse.ArgumentParser(description='Enumerate web directories using spidering and directory guessing.',
-                                     epilog='placeholder')
-    parser.add_argument('-url', '-u', help='url to crawl', required=True)
-    parser.add_argument('--quiet', '-q', help="Don't display banner", action='store_true')
-    parser.add_argument('--allow-subdomains', '-s', help="allow scanner to request subdomains", action='store_true',
+
+    examples = ['webenum.py -h http://test.com -d 4',
+                'webenum.py -h http://test.com -w wordlist.txt',
+                'webenum.py -h https://test.com -w wordlist -d 5 -b 3',
+                'webenum.py -h https://test.com -s -w wordlist -o urls.txt -Od domanis.txt']
+    explanations = ['Enumerate using only spirdering to depth of 4',
+                    'Enumerate using spidering and brute forcing to level 3',
+                    'Enumerate using spidering to level 5 and brute forcing to level 3',
+                    'Enumerate using both methods including subdomains and saving both '
+                                            'found urls and found subdomains to files']
+    epilog = 'Examples:\n'
+    for i in range(0, 4):
+        epilog += '\t%-75s --%s\n' % (examples[i], explanations[i])
+    parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
+                                     description='Enumerate web directories using spidering and directory guessing.',
+                                     epilog=epilog)
+    parser.add_argument('-url', '-u', help='Url to crawl', required=True)
+    parser.add_argument('--quiet', '-q', help="Only print found urls", action='store_true')
+    parser.add_argument('--allow-subdomains', '-s', help="Allow scanner to request subdomains", action='store_true',
                         default=False)
-    parser.add_argument('--depth', '-d', help="depth of directory spidering (default=3) (0=unlimited)", type=int,
+    parser.add_argument('--depth', '-d', help="Depth of directory spidering (default=3) (0=unlimited)", type=int,
                         default=3)
-    parser.add_argument('--brute-force-depth', '-b', help="maximum spidering depth to do brute force directory guessing"
+    parser.add_argument('--brute-force-depth', '-b', help="Maximum spidering depth to do brute force directory guessing"
                         "(default=0) (0=same as spider depth)", type=int, default=0)
-    parser.add_argument('--wordlist', '-w', help="wordlist to use for directory guessing")
+    parser.add_argument('--wordlist', '-w', help="Wordlist to use for directory guessing")
     parser.add_argument('--check-all-urls', '-c', help="Don't check URLs found in HTML pages for status codes",
                         action='store_true')
-    parser.add_argument('--timeout', help='timeout time for requests.', default=10)
-    parser.add_argument('--out-file', '-o', help='write results to specified file', default=None)
+    parser.add_argument('--timeout', help='Timeout time for requests.', default=10)
+    parser.add_argument('--out-file', '-o', help='Write results to specified file', default=None)
     parser.add_argument('--threads', '-t', help='Number of threads to run', default=10)
     parser.add_argument('--no-verify-ssl', '-v', help="Don't verify SSL", action='store_true')
+    parser.add_argument('--out-file-domains', '-Od', help='Write domains to a file', default=None)
+    parser.add_argument('--follow-redirects', '-r', help='Follow HTTP redirects', action='store_true')
     return parser.parse_args()
 
 #
@@ -157,43 +194,62 @@ def print_banner():
     print(BANNER)
     print('\n'+'='*75)
     for arg_name, arg_value in vars(ARGS).items():
-        if arg_name != "quiet":
+        if arg_name != "quiet" and arg_value is not None:
             print('%-20s %s' % (arg_name+':', arg_value))
     print('='*75+'\n\n')
 
+#
+# @desc pad a string to the size of the terminal
+# @param string - string to be padded
+# @return padded string
+#
 def pad(string):
     max_width = os.get_terminal_size().columns
     length = len(string)
-    if length != max_width:
-        if length < max_width:
-            padding = max_width - length
-            string = string + ' '*padding
+    if length < max_width:
+        padding = max_width - length
+        string = string + ' '*padding
     return string
 
 #
-# @desc Prints update to bottom of the screen while running
+# @desc trim a string if it is longer than the terminal size
+# @param string - string to be trimmed
+# @return trimmed string
+#
+def trim(string):
+    max_width = os.get_terminal_size().columns
+    length = len(string)
+    if length > max_width:
+        string = string[0:max_width-3:]+'...'
+    return string
+
+#
+# @desc Prints all updates to screen while running
 # @param update - string to print
 #
-def print_update(depth, url, new_url, mode):
-    if mode == 1:
-        update = '\r%.2f | Depth: %2i | Spidering %-15s' % (time()-START, depth, url)
+def print_update(depth, url, new_url, bf_info):
+
+    if bf_info:
+        update = trim('\r%.2f | Depth: %2i | Brute Forcing: %s | URL: %-15s' % (time() - START, depth, bf_info, url))
     else:
-        update = '\r%.2f | Depth: %2i | Brute Forcing %-15s' % (time()-START, depth, url)
+        update = trim('\r%.2f | Depth: %2i | Spidering: %-15s' % (time() - START, depth, url))
 
     if new_url is not None:
-        if new_url.status is not None:
-            url_string = "\r%-100s (status:%s) [size:%s]" % (str(new_url), new_url.status, new_url.size)
+        if new_url.status is not None and not ARGS.quiet:
+            url_string = "\r%-75s (status:%s) [size:%s]" % (str(new_url), new_url.status, new_url.size)
             stdout.write(pad(url_string)+'\n')
             stdout.flush()
         else:
-            url_string = "\r%-100s" % (str(new_url))
+            url_string = "\r%-75s" % (str(new_url))
             stdout.write(pad(url_string)+'\n')
             stdout.flush()
-        stdout.write(pad(update))
-        stdout.flush()
+        if not ARGS.quiet:
+            stdout.write(pad(update))
+            stdout.flush()
     else:
-        stdout.write(pad(update))
-        stdout.flush()
+        if not ARGS.quiet:
+            stdout.write(pad(update))
+            stdout.flush()
 
 #
 # @desc Overwrites final update and print various statistics
@@ -264,7 +320,7 @@ def build_url_string(str_url, original_url):
             new_url = new_url + original_path + original_url.params + str_url
         else:
             if ':' not in str_url:
-                if len(original_path) > 1:
+                if len(original_path) > 0:
                     if original_path[-1] == '/':
                         new_url = new_url + original_path + str_url
                 else:
@@ -277,8 +333,8 @@ def build_url_string(str_url, original_url):
 # @param path - the request url that produced the html page
 # @return paths - list of Url objects to visit next
 #
-def find_links(page, path, depth):
-    soup = BeautifulSoup(page, 'html.parser')
+def find_links(result, depth):
+    soup = BeautifulSoup(result.text, 'html.parser')
     links = soup.findAll('a')
     links += soup.findAll('link')
     links += soup.findAll('base')
@@ -291,7 +347,7 @@ def find_links(page, path, depth):
             continue
         # if the href is a shortened url, build a full url
         if '://' not in url_str:
-            new_url = Url(build_url_string(url_str, path))
+            new_url = Url(build_url_string(url_str, Url(result.url)))
         else:
             new_url = Url(url_str)
         # Need to handle empty hrefs
@@ -313,21 +369,26 @@ def find_links(page, path, depth):
             if new_url not in URLS:
                 paths.append(new_url)
                 URLS.append(new_url)
-                print_update(depth, path, new_url, 1)
+                print_update(depth, Url(result.url), new_url, None)
         elif ORIGINAL_DOMAIN == new_url.domain:
             if new_url not in URLS:
                 paths.append(new_url)
                 URLS.append(new_url)
-                print_update(depth, path, new_url, 1)
+                print_update(depth, Url(result.url), new_url, None)
     return paths
 
+#
+# @desc requests a given url object and returns response object.
+# @param url - url object to request
+# @return response object
+#
 def request(url):
     r = None
     try:
         with warnings.catch_warnings() as warn:
             warnings.simplefilter('ignore')
             r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                             allow_redirects=False)
+                             allow_redirects=ARGS.follow_redirects)
             if str(url) == ARGS.url and r.status_code == 404:
                 exit_with_error('Error validating request: Received 404')
     except Exception as e:
@@ -342,13 +403,13 @@ def request(url):
 #
 def spider(url, depth):
     found_urls = []
-    print_update(depth, url, None, 1)
+    print_update(depth, url, None, None)
     r = request(url)
     if ARGS.brute_force_depth == 0 or depth <= ARGS.brute_force_depth:
         found_urls = brute_force(url, depth)
     paths = []
     if r is not None:
-        paths = find_links(r.text, url, depth)
+        paths = find_links(r, depth)
         paths = paths + found_urls
     # exit conditions for recursion
     if depth >= ARGS.depth > 0 or len(paths) == 0:
@@ -357,8 +418,12 @@ def spider(url, depth):
     for path in paths:
         spider(path, depth+1)
 
+#
+# @desc exits program with error message
+# @param error - error message
+#
 def exit_with_error(error):
-    print('\r\033[31m '+error)
+    print(pad('\r\033[31m '+error))
     exit(0)
 
 #
@@ -374,23 +439,25 @@ def parse_wordlist():
 
 
 #
-# @desc use directory guessing on a given url and adds found urls to necessary lists
+# @desc orchestrates brute force threads and returns found urls
 # @param url - url to guess from
 # @param depth - current depth in the spidering process
+# @return found_urls any urls discovered during brute forcing
 #
 def brute_force(url, depth):
     found_urls = []
-    if '.' not in url.path:
+    if '.' not in url.path and url.domain + url.path != ORIGINAL_DOMAIN+'/':
         index = 0
         while index < len(WORDLIST):
-            thread_list = []
             thread_number = int(ARGS.threads)
             words_left = len(WORDLIST) - index
             if words_left < thread_number:
                 thread_number = words_left
 
+            thread_list = []
             for i in range(0, thread_number):
-                thread_list.append(BruteForceThread(url, WORDLIST[index].strip('\n'), found_urls, depth))
+                thread_list.append(BruteForceThread(url, WORDLIST[index].strip('\n'), found_urls, depth,
+                                                    index, len(WORDLIST)))
                 index += 1
                 thread_list[i].start()
 
@@ -401,26 +468,55 @@ def brute_force(url, depth):
                     exit_with_error('Error joining threads: '+str(e))
     return found_urls
 
+#
+# @desc called to handle ctrl+c exits. writes to files specified by args and prints final stats
+# @param signum needed for handling signal
+# @param frame needed for handling signal
+#
 def exit_handler(signum, frame):
-    if ARGS.out_file:
-        print('\nWriting partial results to file...')
-        output_to_file(ARGS.out_file)
-    print('\nexiting')
-    print_final_stats()
+    if not ARGS.quiet:
+        print('\nexiting')
+    if threading.active_count() > 1:
+        if not ARGS.quiet:
+            print('Joining threads...')
+        for thread in threading.enumerate()[1::]:
+            try:
+                thread.join()
+            except Exception as e:
+                exit_with_error('Error joining threads:'+e)
+    output_to_file()
+    if not ARGS.quiet:
+        print_final_stats()
     exit(0)
 
-def output_to_file(filename):
-    try:
-        with open(filename, 'w') as out_file:
-            index = 0
-            for url in URLS:
-                index += 1
-                if index >= len(URLS):
-                    out_file.write(str(url))
-                else:
-                    out_file.write(str(url)+'\n')
-    except Exception as e:
-        exit_with_error('Error writing to file ' + str(e))
+#
+# @desc handles writing to files based on arguments
+#
+def output_to_file():
+    if ARGS.out_file:
+        try:
+            with open(ARGS.out_file, 'w') as out_file:
+                index = 0
+                for url in URLS:
+                    index += 1
+                    if index >= len(URLS):
+                        out_file.write(str(url))
+                    else:
+                        out_file.write(str(url)+'\n')
+        except Exception as e:
+            exit_with_error('Error writing to file ' + str(e))
+    if ARGS.out_file_domains:
+        try:
+            with open(ARGS.out_file_domains, 'w') as out_file:
+                index = 0
+                for domain in DOMAINS:
+                    index += 1
+                    if index >= len(DOMAINS):
+                        out_file.write(str(domain))
+                    else:
+                        out_file.write(str(domain) + '\n')
+        except Exception as e:
+            exit_with_error('Error writing to file' + str(e))
 
 #
 # @main
@@ -429,16 +525,25 @@ def output_to_file(filename):
 def main():
     global ARGS, ORIGINAL_DOMAIN
     colorama.init(autoreset=True)
+    requests.urllib3.disable_warnings()
     ARGS = parseargs()
     signal.signal(signal.SIGINT, exit_handler)
     if not ARGS.quiet:
         print_banner()
     original_url = Url(ARGS.url)
 
-    test_url = build_url_string('/cfe15ae6b841b3ac72777ace53f35ab4888', original_url)
-    stat = request(test_url).status_code
-    if stat is not None and stat != 404:
-        exit_with_error('Could not validate 404 on bad url: '+test_url)
+    result = request(original_url)
+    stat = result.status_code
+    if stat == 404:
+        exit_with_error('URL provided results in 404')
+    else:
+        URLS.append(original_url)
+        print_update(0, original_url, original_url, None)
+    test_url = build_url_string('/cfe15ae6b841b3ac72777ace53f35ab4888', original_url,)
+    result = request(test_url)
+    stat = result.status_code
+    if stat != 404:
+        exit_with_error('Could not validate 404 on bad url: ' + test_url + ' Status Code: ' + str(result.status_code))
 
     ORIGINAL_DOMAIN = original_url.domain
     DOMAINS.append(ORIGINAL_DOMAIN)
@@ -446,8 +551,9 @@ def main():
     if ARGS.wordlist:
         parse_wordlist()
     spider(original_url, 0)
-    if ARGS.out_file:
-        output_to_file(ARGS.out_file)
-    print_final_stats()
+    output_to_file()
+    if not ARGS.quiet:
+        print_final_stats()
+
 
 main()

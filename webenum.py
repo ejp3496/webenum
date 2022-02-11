@@ -188,6 +188,7 @@ def parseargs():
     parser.add_argument('--no-verify-ssl', '-v', help="Don't verify SSL", action='store_true')
     parser.add_argument('--out-file-domains', '-Od', help='Write domains to a file', default=None)
     parser.add_argument('--follow-redirects', '-r', help='Follow HTTP redirects', action='store_true')
+    parser.add_argument('--basic-authentication', '-a', help='set basic authentication creds in the form ("user:pass"')
     return parser.parse_args()
 
 #
@@ -390,8 +391,13 @@ def request(url):
     try:
         with warnings.catch_warnings() as warn:
             warnings.simplefilter('ignore')
-            r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                             allow_redirects=ARGS.follow_redirects)
+            if ARGS.basic_authentication:
+                creds = ARGS.basic_authentication.split(':')
+                r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                                 allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]))
+            else:
+                r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                                 allow_redirects=ARGS.follow_redirects)
             if str(url) == ARGS.url and r.status_code == 404:
                 exit_with_error('Error validating request: Received 404')
     except Exception as e:

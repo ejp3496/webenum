@@ -4,7 +4,7 @@
 |__/|__/_____/_____/\___/_/ /_/\__,_/_/ /_/ /_/</pre>
 
 ## Description
-Web enumerator similar to dirbuster or gobuster but utilizes brute forcing AND spidering to get a more complete picture of a web surface. Git project includes a small word list named ```wordlist.txt```
+Web enumerator similar to dirbuster or gobuster but utilizes brute forcing AND crawling to get a more complete picture of a web surface. Git project includes a small word list named ```wordlist.txt```
   - No clunky GUI
   - Highly customizable
   - fast
@@ -33,9 +33,9 @@ options:
   --allow-subdomains, -s
                         Allow scanner to request subdomains
   --depth DEPTH, -d DEPTH
-                        Depth of directory spidering (default=3) (0=unlimited)
+                        Depth of directory crawling (default=3) (0=unlimited)
   --brute-force-depth BRUTE_FORCE_DEPTH, -b BRUTE_FORCE_DEPTH
-                        Maximum spidering depth to do brute force directory guessing(default=0) (0=same as spider depth)
+                        Maximum crawling depth to do brute force directory guessing(default=0) (0=same as crawl depth)
   --wordlist WORDLIST, -w WORDLIST
                         Wordlist to use for directory guessing
   --check-all-urls, -c  Don't check URLs found in HTML pages for status codes
@@ -52,7 +52,7 @@ options:
 
 Examples:
         webenum.py -h http://test.com -d 4                                          --Enumerate using only spirdering to depth of 4
-        webenum.py -h http://test.com -w wordlist.txt                               --Enumerate using spidering and brute forcing to level 3
-        webenum.py -h https://test.com -w wordlist -d 5 -b 3                        --Enumerate using spidering to level 5 and brute forcing to level 3
+        webenum.py -h http://test.com -w wordlist.txt                               --Enumerate using crawling and brute forcing to level 3
+        webenum.py -h https://test.com -w wordlist -d 5 -b 3                        --Enumerate using crawling to level 5 and brute forcing to level 3
         webenum.py -h https://test.com -s -w wordlist -o urls.txt -Od domanis.txt   --Enumerate using both methods including subdomains and saving both found urls and found subdomains to files
 ```

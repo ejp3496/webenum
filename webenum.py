@@ -2,7 +2,7 @@
 #
 #                                           WEBenum
 #
-# @desc a tool to enumerator web directories using both recursive spidering and directory guessing.
+# @desc a tool to enumerator web directories using both recursive crawling and directory guessing.
 #
 # @author Evan Palmiotti
 # @required requests, argparse, bs4, re, sys
@@ -160,25 +160,25 @@ def parseargs():
                 'webenum.py -h http://test.com -w wordlist.txt',
                 'webenum.py -h https://test.com -w wordlist -d 5 -b 3',
                 'webenum.py -h https://test.com -s -w wordlist -o urls.txt -Od domanis.txt']
-    explanations = ['Enumerate using only spirdering to depth of 4',
-                    'Enumerate using spidering and brute forcing to level 3',
-                    'Enumerate using spidering to level 5 and brute forcing to level 3',
+    explanations = ['Enumerate using only crawling to depth of 4',
+                    'Enumerate using crawling and brute forcing to level 3',
+                    'Enumerate using crawling to level 5 and brute forcing to level 3',
                     'Enumerate using both methods including subdomains and saving both '
                                             'found urls and found subdomains to files']
     epilog = 'Examples:\n'
     for i in range(0, 4):
         epilog += '\t%-75s --%s\n' % (examples[i], explanations[i])
     parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
-                                     description='Enumerate web directories using spidering and directory guessing.',
+                                     description='Enumerate web directories using crawling and directory guessing.',
                                      epilog=epilog)
     parser.add_argument('-url', '-u', help='Url to crawl', required=True)
     parser.add_argument('--quiet', '-q', help="Only print found urls", action='store_true')
     parser.add_argument('--allow-subdomains', '-s', help="Allow scanner to request subdomains", action='store_true',
                         default=False)
-    parser.add_argument('--depth', '-d', help="Depth of directory spidering (default=3) (0=unlimited)", type=int,
+    parser.add_argument('--depth', '-d', help="Depth of directory crawling (default=3) (0=unlimited)", type=int,
                         default=3)
-    parser.add_argument('--brute-force-depth', '-b', help="Maximum spidering depth to do brute force directory guessing"
-                        "(default=0) (0=same as spider depth)", type=int, default=0)
+    parser.add_argument('--brute-force-depth', '-b', help="Maximum crawling depth to do brute force directory guessing"
+                        "(default=0) (0=same as crawl depth)", type=int, default=0)
     parser.add_argument('--wordlist', '-w', help="Wordlist to use for directory guessing")
     parser.add_argument('--check-all-urls', '-c', help="Don't check URLs found in HTML pages for status codes",
                         action='store_true')
@@ -235,7 +235,7 @@ def print_update(depth, url, new_url, bf_info):
     if bf_info:
         update = trim('\r%.2f | Depth: %2i | Brute Forcing: %s | URL: %-15s' % (time() - START, depth, bf_info, url))
     else:
-        update = trim('\r%.2f | Depth: %2i | Spidering: %-15s' % (time() - START, depth, url))
+        update = trim('\r%.2f | Depth: %2i | crawling: %-15s' % (time() - START, depth, url))
 
     if new_url is not None:
         if new_url.status is not None and not ARGS.quiet:
@@ -400,11 +400,11 @@ def request(url):
     return r
 
 #
-# @desc recursive function to spider the web address and add found urls to global list.
+# @desc recursive function to crawl the web address and add found urls to global list.
 # @param url - starting url as Url object
 # @param depth - integer for maximum recursive depth
 #
-def spider(url, depth):
+def crawl(url, depth):
     found_urls = []
     print_update(depth, url, None, None)
     r = request(url)
@@ -419,7 +419,7 @@ def spider(url, depth):
         return
 
     for path in paths:
-        spider(path, depth+1)
+        crawl(path, depth+1)
 
 #
 # @desc exits program with error message
@@ -444,7 +444,7 @@ def parse_wordlist():
 #
 # @desc orchestrates brute force threads and returns found urls
 # @param url - url to guess from
-# @param depth - current depth in the spidering process
+# @param depth - current depth in the crawling process
 # @return found_urls any urls discovered during brute forcing
 #
 def brute_force(url, depth):
@@ -523,7 +523,7 @@ def output_to_file():
 
 #
 # @main
-# @desc processes arguments and kicks off spidering. Once done, prints final statistics.
+# @desc processes arguments and kicks off crawling. Once done, prints final statistics.
 #
 def main():
     global ARGS, ORIGINAL_DOMAIN
@@ -553,7 +553,7 @@ def main():
 
     if ARGS.wordlist:
         parse_wordlist()
-    spider(original_url, 0)
+    crawl(original_url, 0)
     output_to_file()
     if not ARGS.quiet:
         print_final_stats()

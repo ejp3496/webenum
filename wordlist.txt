@@ -57,6 +57,10 @@ actions
 active
 adm
 admin
+admin.txt
+admin.html
+admin.php
+admin.xhtml
 admin_
 admin_login
 admin_logon
@@ -431,6 +435,9 @@ include
 includes
 incoming
 incs
+index.html
+index.php
+index.xhtml
 index
 index2
 index_adm

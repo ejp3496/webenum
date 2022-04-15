@@ -180,7 +180,7 @@ def parseargs():
     parser.add_argument('--brute-force-depth', '-b', help="Maximum crawling depth to do brute force directory guessing"
                         "(default=0) (0=same as crawl depth)", type=int, default=0)
     parser.add_argument('--wordlist', '-w', help="Wordlist to use for directory guessing")
-    parser.add_argument('--check-all-urls', '-c', help="Don't check URLs found in HTML pages for status codes",
+    parser.add_argument('--check-all-urls', '-z', help="Check URLs found in HTML pages for status codes",
                         action='store_true')
     parser.add_argument('--timeout', help='Timeout time for requests.', default=10)
     parser.add_argument('--out-file', '-o', help='Write results to specified file', default=None)
@@ -188,7 +188,8 @@ def parseargs():
     parser.add_argument('--no-verify-ssl', '-v', help="Don't verify SSL", action='store_true')
     parser.add_argument('--out-file-domains', '-Od', help='Write domains to a file', default=None)
     parser.add_argument('--follow-redirects', '-r', help='Follow HTTP redirects', action='store_true')
-    parser.add_argument('--basic-authentication', '-a', help='set basic authentication creds in the form ("user:pass"')
+    parser.add_argument('--basic-auth', '-a', help='Set basic authentication creds in the form user:pass')
+    parser.add_argument('--cookies', '-c', help='Set cookie on requests in the form name:value,name1:value1')
     return parser.parse_args()
 
 #
@@ -391,11 +392,23 @@ def request(url):
     try:
         with warnings.catch_warnings() as warn:
             warnings.simplefilter('ignore')
-            if ARGS.basic_authentication:
-                creds = ARGS.basic_authentication.split(':')
+            if ARGS.cookies:
+                cs = ARGS.cookies.split(',')
+                cookies = {}
+                for c in cs:
+                    csplit = c.split(':')
+                    cookies[csplit[0]] = csplit[1]
+            if ARGS.basic_auth:
+                creds = ARGS.basic_auth.split(':')
+                if ARGS.cookies:
+                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                                     allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]), cookies=cookies)
                 r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                  allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]))
             else:
+                if ARGS.cookies:
+                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                                     allow_redirects=ARGS.follow_redirects, cookies=cookies)
                 r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                  allow_redirects=ARGS.follow_redirects)
             if str(url) == ARGS.url and r.status_code == 404:

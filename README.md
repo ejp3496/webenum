@@ -49,6 +49,8 @@ options:
                         Write domains to a file
   --follow-redirects, -r
                         Follow HTTP redirects
+  --cookies COOKIES, -c COOKIES
+                        Set cookie on requests in the form name:value,name1:value1
 
 Examples:
         webenum.py -h http://test.com -d 4                                          --Enumerate using only spirdering to depth of 4

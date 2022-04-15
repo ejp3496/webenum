@@ -35,6 +35,7 @@ DOMAINS = []             # found domains (updated by script)
 WORDLIST = []              # word list read from file
 ARGS: any                # stored arguments (updated by script)
 ORIGINAL_DOMAIN = ''     # Original Domain (updated by script)
+ORIGINAL_PORT = ''
 THREAD_LOCK = threading.Lock()
 START = time()
 
@@ -159,7 +160,7 @@ def parseargs():
     examples = ['webenum.py -h http://test.com -d 4',
                 'webenum.py -h http://test.com -w wordlist.txt',
                 'webenum.py -h https://test.com -w wordlist -d 5 -b 3',
-                'webenum.py -h https://test.com -s -w wordlist -o urls.txt -Od domanis.txt']
+                'webenum.py -h https://test.com -s -w wordlist -o urls.txt -Od domains.txt']
     explanations = ['Enumerate using only crawling to depth of 4',
                     'Enumerate using crawling and brute forcing to level 3',
                     'Enumerate using crawling to level 5 and brute forcing to level 3',
@@ -174,6 +175,8 @@ def parseargs():
     parser.add_argument('-url', '-u', help='Url to crawl', required=True)
     parser.add_argument('--quiet', '-q', help="Only print found urls", action='store_true')
     parser.add_argument('--allow-subdomains', '-s', help="Allow scanner to request subdomains", action='store_true',
+                        default=False)
+    parser.add_argument('--allow-other-ports', '-p', help="Allow scanner to request other ports", action='store_true',
                         default=False)
     parser.add_argument('--depth', '-d', help="Depth of directory crawling (default=3) (0=unlimited)", type=int,
                         default=3)
@@ -368,18 +371,19 @@ def find_links(result, depth):
             else:
                 new_url.status = 'Timeout'
 
-        if ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
-            if new_url.domain not in DOMAINS:
-                DOMAINS.append(new_url.domain)
-            if new_url not in URLS:
-                paths.append(new_url)
-                URLS.append(new_url)
-                print_update(depth, Url(result.url), new_url, None)
-        elif ORIGINAL_DOMAIN == new_url.domain:
-            if new_url not in URLS:
-                paths.append(new_url)
-                URLS.append(new_url)
-                print_update(depth, Url(result.url), new_url, None)
+        if ORIGINAL_PORT == new_url.port or ARGS.allow_other_ports:
+            if ORIGINAL_DOMAIN in new_url.domain and ARGS.allow_subdomains:
+                if new_url.domain not in DOMAINS:
+                    DOMAINS.append(new_url.domain)
+                if new_url not in URLS:
+                    paths.append(new_url)
+                    URLS.append(new_url)
+                    print_update(depth, Url(result.url), new_url, None)
+            elif ORIGINAL_DOMAIN == new_url.domain:
+                if new_url not in URLS:
+                    paths.append(new_url)
+                    URLS.append(new_url)
+                    print_update(depth, Url(result.url), new_url, None)
     return paths
 
 #
@@ -545,7 +549,7 @@ def output_to_file():
 # @desc processes arguments and kicks off crawling. Once done, prints final statistics.
 #
 def main():
-    global ARGS, ORIGINAL_DOMAIN
+    global ARGS, ORIGINAL_DOMAIN, ORIGINAL_PORT
     colorama.init(autoreset=True)
     requests.urllib3.disable_warnings()
     ARGS = parseargs()
@@ -568,6 +572,7 @@ def main():
         exit_with_error('Could not validate 404 on bad url: ' + test_url + ' Status Code: ' + str(result.status_code))
 
     ORIGINAL_DOMAIN = original_url.domain
+    ORIGINAL_PORT = original_url.port
     DOMAINS.append(ORIGINAL_DOMAIN)
 
     if ARGS.wordlist:

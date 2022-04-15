@@ -5,7 +5,7 @@
 # @desc a tool to enumerator web directories using both recursive crawling and directory guessing.
 #
 # @author Evan Palmiotti
-# @required requests, argparse, bs4, re, sys
+# @required argparse, bs4, colorama, os, re, requests, signal, sys, threading, time, warnings
 ########################################################################################################
 import os
 import requests

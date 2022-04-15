@@ -32,6 +32,8 @@ options:
   --quiet, -q           Only print found urls
   --allow-subdomains, -s
                         Allow scanner to request subdomains
+  --allow-other-ports, -p
+                        Allow scanner to request other ports
   --depth DEPTH, -d DEPTH
                         Depth of directory crawling (default=3) (0=unlimited)
   --brute-force-depth BRUTE_FORCE_DEPTH, -b BRUTE_FORCE_DEPTH

@@ -407,13 +407,15 @@ def request(url):
                 if ARGS.cookies:
                     r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                      allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]), cookies=cookies)
-                r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                else:
+                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                  allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]))
             else:
                 if ARGS.cookies:
                     r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                      allow_redirects=ARGS.follow_redirects, cookies=cookies)
-                r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                else:
+                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
                                  allow_redirects=ARGS.follow_redirects)
             if str(url) == ARGS.url and r.status_code == 404:
                 exit_with_error('Error validating request: Received 404')

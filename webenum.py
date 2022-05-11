@@ -193,6 +193,9 @@ def parseargs():
     parser.add_argument('--follow-redirects', '-r', help='Follow HTTP redirects', action='store_true')
     parser.add_argument('--basic-auth', '-a', help='Set basic authentication creds in the form user:pass')
     parser.add_argument('--cookies', '-c', help='Set cookie on requests in the form name:value,name1:value1')
+    parser.add_argument('--fail-cond', 'f',
+                        help='Set a string within the response for failure or "not found" condition',
+                        type=str)
     return parser.parse_args()
 
 #
@@ -274,7 +277,7 @@ def print_final_stats():
 # @param str_url - url to print
 #
 def parse_url(str_url):
-    reg_url = re.compile("^(?P<service>https?://)?(?P<domain>[a-zA-Z0-9.]*)?(?P<port>:\d{1,4})?"
+    reg_url = re.compile("^(?P<service>https?://)?(?P<domain>[\-a-zA-Z0-9.]*)?(?P<port>:\d{1,4})?"
                          "(?P<path>[/.%_\-a-zA-Z0-9]*)?(?P<params>[?,#].*)?")
     match = reg_url.match(str_url)
     return match

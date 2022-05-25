@@ -137,7 +137,7 @@ def brute_force_thread(depth, url, word, found_urls, bf_info):
             raise ConnectionError("Lost connection to server")
         status = result.status_code
         size = len(result.text)
-        if status and status != 404:
+        if checkResponse(result):
             new_url.status = status
             new_url.size = size
             # synchronize threads for writing operations
@@ -191,9 +191,10 @@ def parseargs():
     parser.add_argument('--no-verify-ssl', '-v', help="Don't verify SSL", action='store_true')
     parser.add_argument('--out-file-domains', '-Od', help='Write domains to a file', default=None)
     parser.add_argument('--follow-redirects', '-r', help='Follow HTTP redirects', action='store_true')
-    parser.add_argument('--basic-auth', '-a', help='Set basic authentication creds in the form user:pass')
-    parser.add_argument('--cookies', '-c', help='Set cookie on requests in the form name:value,name1:value1')
-    parser.add_argument('--fail-cond', 'f',
+    parser.add_argument('--basic-auth', '-a', help='Set basic authentication creds in the form user:pass', default=None)
+    parser.add_argument('--cookies', '-c', help='Set cookie on requests in the form name:value,name1:value1',
+                        default=None)
+    parser.add_argument('--fail-cond', '-f',
                         help='Set a string within the response for failure or "not found" condition',
                         type=str)
     return parser.parse_args()
@@ -405,21 +406,14 @@ def request(url):
                 for c in cs:
                     csplit = c.split(':')
                     cookies[csplit[0]] = csplit[1]
+
+            auth = None
             if ARGS.basic_auth:
-                creds = ARGS.basic_auth.split(':')
-                if ARGS.cookies:
-                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                                     allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]), cookies=cookies)
-                else:
-                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                                 allow_redirects=ARGS.follow_redirects, auth=(creds[0], creds[1]))
-            else:
-                if ARGS.cookies:
-                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                                     allow_redirects=ARGS.follow_redirects, cookies=cookies)
-                else:
-                    r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
-                                 allow_redirects=ARGS.follow_redirects)
+                creds = ARGS.basic_auth.split(':')[0]
+                auth = (creds[0], creds[1])
+            headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36"}
+            r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+                             allow_redirects=ARGS.follow_redirects, auth=auth, cookies=ARGS.cookies, headers=headers)
             if str(url) == ARGS.url and r.status_code == 404:
                 exit_with_error('Error validating request: Received 404')
     except Exception as e:
@@ -477,7 +471,7 @@ def parse_wordlist():
 #
 def brute_force(url, depth):
     found_urls = []
-    if '.' not in url.path and url.domain + url.path != ORIGINAL_DOMAIN+'/':
+    if '.' not in url.path and (url.domain + url.path != ORIGINAL_DOMAIN+'/' or depth == 0):
         index = 0
         while index < len(WORDLIST):
             thread_number = int(ARGS.threads)
@@ -550,6 +544,17 @@ def output_to_file():
             exit_with_error('Error writing to file' + str(e))
 
 #
+# @checkResponse
+# @param result requests response object
+# @desc check if a response indicates not found
+# @return true if the response is a found response
+#
+def checkResponse(result):
+    if result.status_code == 404 or (ARGS.fail_cond and ARGS.fail_cond in result.text):
+        return False
+    return True
+
+#
 # @main
 # @desc processes arguments and kicks off crawling. Once done, prints final statistics.
 #
@@ -565,7 +570,8 @@ def main():
 
     result = request(original_url)
     stat = result.status_code
-    if stat == 404:
+    if not checkResponse(result):
+        #if stat == 404:
         exit_with_error('URL provided results in 404')
     else:
         URLS.append(original_url)
@@ -573,7 +579,7 @@ def main():
     test_url = build_url_string('/cfe15ae6b841b3ac72777ace53f35ab4888', original_url,)
     result = request(test_url)
     stat = result.status_code
-    if stat != 404:
+    if checkResponse(result):
         exit_with_error('Could not validate 404 on bad url: ' + test_url + ' Status Code: ' + str(result.status_code))
 
     ORIGINAL_DOMAIN = original_url.domain

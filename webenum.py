@@ -412,7 +412,7 @@ def request(url):
                 creds = ARGS.basic_auth.split(':')[0]
                 auth = (creds[0], creds[1])
             headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36"}
-            r = requests.get(str(url).strip('\n'), timeout=ARGS.timeout, verify=(not ARGS.no_verify_ssl),
+            r = requests.get(str(url).strip('\n'), timeout=int(ARGS.timeout), verify=(not ARGS.no_verify_ssl),
                              allow_redirects=ARGS.follow_redirects, auth=auth, cookies=ARGS.cookies, headers=headers)
             if str(url) == ARGS.url and r.status_code == 404:
                 exit_with_error('Error validating request: Received 404')
